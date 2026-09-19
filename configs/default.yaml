@@ -1,0 +1,35 @@
+project:
+  name: production-video-analytics
+  output_directory: outputs
+
+input:
+  source: null
+  frame_stride: 1
+
+detection:
+  backend: yolo
+  model_path: null
+  confidence_threshold: 0.25
+  iou_threshold: 0.45
+  image_size: 1280
+  device: auto
+
+tracking:
+  backend: bytetrack
+  track_high_threshold: 0.5
+  track_low_threshold: 0.1
+  new_track_threshold: 0.6
+  grace_frames: 30
+
+analytics:
+  temporal_filtering: true
+  minimum_track_age: 3
+  save_json: true
+  save_csv: true
+  save_annotated_video: false
+
+benchmark:
+  warmup_frames: 30
+  collect_stage_latency: true
+  collect_memory_usage: true
+  estimate_cost_per_video_hour: true

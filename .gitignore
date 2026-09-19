@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Editors and operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Models, data, and generated outputs
+*.pt
+*.pth
+*.onnx
+*.engine
+data/
+datasets/
+models/
+weights/
+outputs/
+runs/
+artifacts/
+*.mp4
+*.mov
+*.avi
+*.mkv
+
+# Keep documentation assets when added
+!docs/assets/
