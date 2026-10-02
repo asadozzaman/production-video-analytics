@@ -40,3 +40,16 @@ artifacts/
 
 # Keep documentation assets when added
 !docs/assets/
+
+# Local video data
+data/**/*.mp4
+data/**/*.avi
+data/**/*.mov
+
+# Model artifacts
+models/**/*.pt
+models/**/*.onnx
+models/**/*.engine
+
+# Runtime outputs
+outputs/
