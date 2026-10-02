@@ -2,7 +2,7 @@
 
 A production-oriented computer vision portfolio project for turning raw video into reliable detections, tracks, counts, operational metrics, and machine-readable results.
 
-> **Status:** Foundation phase. The architecture, software contracts, configuration, and benchmark plan are in place. Model integration and reproducible benchmarks are the next milestones.
+> **Status:** The repository runs pretrained YOLO detection and ByteTrack tracking on video. Formal tracking evaluation and reproducible benchmarks are later milestones.
 
 ## Why this project exists
 
@@ -82,8 +82,8 @@ No benchmark numbers will be published without a reproducible experiment.
 - [x] Define architecture and repository foundation
 - [x] Add typed detection and tracking contracts
 - [x] Add configuration and metrics foundation
-- [ ] Integrate a public pretrained YOLO model
-- [ ] Add ByteTrack or BoT-SORT adapter
+- [x] Integrate a public pretrained YOLO model
+- [x] Add ByteTrack adapter
 - [ ] Add temporal filtering and line/zone counting
 - [ ] Produce JSON/CSV results and annotated video
 - [ ] Add tests and a reproducible public example

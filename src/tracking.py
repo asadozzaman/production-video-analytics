@@ -36,3 +36,17 @@ class Tracker(Protocol):
     def reset(self) -> None:
         """Clear all active tracks before processing a new video."""
         ...
+
+
+class NullTracker:
+    """Explicitly disable tracking while satisfying the pipeline contract."""
+
+    def update(
+        self,
+        detections: Sequence[Detection],
+        frame: np.ndarray,
+    ) -> Sequence[Track]:
+        return ()
+
+    def reset(self) -> None:
+        pass
