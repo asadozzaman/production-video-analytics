@@ -1,4 +1,4 @@
-"""Run the detection-only pipeline on a local video."""
+"""Run the repository detection or tracking pipeline on a local video."""
 
 from __future__ import annotations
 
@@ -14,7 +14,8 @@ import yaml
 
 from .detection import Detection
 from .detectors import UltralyticsYOLODetector
-from .tracking import NullTracker
+from .tracking import NullTracker, Track, Tracker
+from .trackers import ByteTrackAdapter
 from .video_pipeline import VideoAnalyticsPipeline
 
 
@@ -27,6 +28,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--conf", type=float, help="Confidence threshold")
     parser.add_argument("--iou", type=float, help="IoU threshold")
     parser.add_argument("--imgsz", type=int, help="Inference image size")
+    parser.add_argument("--tracker", choices=("none", "bytetrack"), default="none")
     return parser.parse_args()
 
 
@@ -49,7 +51,18 @@ def make_pipeline(args: argparse.Namespace) -> tuple[VideoAnalyticsPipeline, Pat
         image_size=args.imgsz if args.imgsz is not None else detection_config["image_size"],
         device=args.device if args.device is not None else detection_config["device"],
     )
-    return VideoAnalyticsPipeline(detector, NullTracker()), Path(source)
+    tracker: Tracker = NullTracker()
+    if args.tracker == "bytetrack":
+        tracking_config = config["tracking"]
+        tracker = ByteTrackAdapter(
+            track_high_threshold=tracking_config["track_high_threshold"],
+            track_low_threshold=tracking_config["track_low_threshold"],
+            new_track_threshold=tracking_config["new_track_threshold"],
+            grace_frames=tracking_config["grace_frames"],
+            match_threshold=tracking_config["match_threshold"],
+            fuse_score=tracking_config["fuse_score"],
+        )
+    return VideoAnalyticsPipeline(detector, tracker), Path(source)
 
 
 def draw_detections(frame: np.ndarray, detections: Sequence[Detection]) -> None:
@@ -58,6 +71,16 @@ def draw_detections(frame: np.ndarray, detections: Sequence[Detection]) -> None:
         label = f"{detection.class_name or detection.class_id} {detection.confidence:.2f}"
         cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
         cv2.putText(frame, label, (x1, max(20, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 0), 2)
+
+
+def draw_tracks(frame: np.ndarray, tracks: Sequence[Track], detections: Sequence[Detection]) -> None:
+    class_names = {detection.class_id: detection.class_name for detection in detections}
+    for track in tracks:
+        x1, y1, x2, y2 = (round(value) for value in track.xyxy)
+        class_name = class_names.get(track.class_id) or str(track.class_id)
+        label = f"ID {track.track_id} {class_name} {track.confidence:.2f}"
+        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        cv2.putText(frame, label, (max(0, x1), max(20, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 0), 2)
 
 
 def run(args: argparse.Namespace) -> None:
@@ -97,14 +120,21 @@ def run(args: argparse.Namespace) -> None:
         pipeline.reset()
         processed = 0
         total_detections = 0
+        total_track_observations = 0
+        unique_track_ids: set[int] = set()
         while ok:
             if frame.shape[:2] != (height, width):
                 raise RuntimeError(f"Unexpected frame size at index {processed}: {frame.shape[:2]}")
             result = pipeline.process_frame(frame, processed, processed / fps)
-            draw_detections(frame, result.detections)
+            if args.tracker == "bytetrack":
+                draw_tracks(frame, result.tracks, result.detections)
+            else:
+                draw_detections(frame, result.detections)
             writer.write(frame)
             processed += 1
             total_detections += len(result.detections)
+            total_track_observations += len(result.tracks)
+            unique_track_ids.update(track.track_id for track in result.tracks)
             ok, frame = capture.read()
 
         if expected_frames > 0 and processed != expected_frames:
@@ -120,11 +150,18 @@ def run(args: argparse.Namespace) -> None:
     print(f"Output: {output}")
     print(f"Processed frames: {processed}")
     print(f"Total detections: {total_detections}")
+    if args.tracker == "bytetrack":
+        print(f"Total track observations: {total_track_observations}")
+        print(f"Unique track IDs observed: {len(unique_track_ids)}")
     print(f"Source video FPS: {fps:.2f}")
     print(f"Resolution: {width}x{height}")
     print(f"Total wall time: {wall_seconds:.2f} s")
     print(f"Average detection latency: {detection.mean_ms:.2f} ms/frame")
     print(f"Detection throughput (inference stage): {detection.fps:.2f} frames/s")
+    if args.tracker == "bytetrack":
+        tracking = pipeline.metrics.tracking
+        print(f"Average tracking latency: {tracking.mean_ms:.2f} ms/frame")
+        print(f"Tracking throughput (association stage): {tracking.fps:.2f} frames/s")
     print(f"End-to-end processing throughput: {processed / wall_seconds:.2f} frames/s")
 
 

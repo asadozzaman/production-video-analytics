@@ -156,3 +156,77 @@ The user reported that the independent verification also completed the full
 pipeline and passed `python -m compileall src` and `git diff --check`. These
 are separate local runs, not a controlled speed comparison with each other
 or the CLI baseline.
+
+## Step 4 — Repository ByteTrack integration
+
+Status: **PASS** (functional integration on CPU; no formal tracking-accuracy
+evaluation)
+
+The independently verified reference baseline used Ultralytics `yolo track`
+with `tracker=bytetrack.yaml`, `conf=0.25`, `imgsz=640`, and `device=cpu` on
+the same 393-frame video. The user visually observed persistent IDs in that
+reference output: car ID 101, truck ID 112, and fire hydrant ID 30 across
+consecutive frames. These reference IDs are separate from the repository run.
+
+The repository command used from its root (PowerShell) was:
+
+```powershell
+& 'env/Scripts/python.exe' -m src.run_video --source data/input/test_traffic.mp4 --model models/yolo26n.pt --output outputs/step4_repo_bytetrack.mp4 --device cpu --conf 0.25 --imgsz 640 --tracker bytetrack
+```
+
+The runner decodes each frame with OpenCV. `UltralyticsYOLODetector` emits
+repository `Detection` objects; `ByteTrackAdapter` converts those to the
+NumPy-backed box input expected by Ultralytics `BYTETracker.update()` and
+converts its active outputs to repository `Track` objects. The pipeline owns
+stage timing and the runner draws IDs, class names, and scores from `Track`
+objects. The detector does not call `model.track()`.
+
+The tracker settings in `configs/default.yaml` map as follows:
+
+| Repository setting | Ultralytics ByteTrack setting | Value |
+|---|---|---:|
+| `track_high_threshold` | `track_high_thresh` | 0.5 |
+| `track_low_threshold` | `track_low_thresh` | 0.1 |
+| `new_track_threshold` | `new_track_thresh` | 0.6 |
+| `grace_frames` | `track_buffer` (maximum lost frames retained) | 30 |
+| `match_threshold` | `match_thresh` | 0.8 |
+| `fuse_score` | `fuse_score` | true |
+
+These repository high and new-track thresholds differ from Ultralytics
+`bytetrack.yaml` defaults (both 0.25). The detector's 0.25 confidence cutoff
+also means ByteTrack never receives boxes below 0.25, even though its
+low threshold is 0.1. Results from the two paths are therefore not a
+controlled tracker comparison.
+
+`Track.age` is elapsed frames since ByteTrack's `start_frame`, including any
+lost interval. `Track.missed_frames` is the difference between the current
+tracker frame and the track's last update; active tracks returned by this
+adapter normally have zero missed frames. No values are fabricated for tracks
+that ByteTrack does not return.
+
+| Observed repository result | Value |
+|---|---:|
+| Processed frames | 393 |
+| Total detections | 2,288 |
+| Total track observations | 1,761 |
+| Unique track IDs observed | 42 |
+| Source video FPS | 25.00 |
+| Output resolution | 1920 × 1080 |
+| Total wall time | 30.04 s |
+| Average detection latency | 51.52 ms/frame |
+| Detection throughput (inference stage) | 19.41 frames/s |
+| Average tracking latency | 1.42 ms/frame |
+| Tracking throughput (association stage) | 701.88 frames/s |
+| End-to-end processing throughput | 13.08 frames/s |
+
+Output: `outputs/step4_repo_bytetrack.mp4` (excluded from Git). It was reopened
+with OpenCV and all 393 frames decoded at 1920 × 1080 and 25 FPS. In output
+frames 100 and 101, the same truck retained ID 11, the same car retained ID
+14, and the same fire hydrant retained ID 5. This confirms visible ID
+continuity in these examples, not tracking accuracy. Formal validation will
+require ground truth and metrics such as HOTA, IDF1, ID switches, and
+fragmentation.
+
+The focused adapter tests, syntax/import checks, and `git diff --check`
+passed. The full detection-only Step 3 command also completed all 393 frames
+with 2,288 detections after the tracking addition.

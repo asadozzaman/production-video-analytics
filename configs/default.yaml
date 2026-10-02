@@ -20,6 +20,8 @@ tracking:
   track_low_threshold: 0.1
   new_track_threshold: 0.6
   grace_frames: 30
+  match_threshold: 0.8
+  fuse_score: true
 
 analytics:
   temporal_filtering: true
