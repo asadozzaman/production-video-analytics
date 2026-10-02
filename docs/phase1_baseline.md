@@ -113,3 +113,46 @@ yolo predict \
   save=True \
   project=outputs \
   name=step2_yolo_baseline
+```
+
+## Step 3 — Repository YOLO detection pipeline
+
+Status: **PASS** (detection only, validated locally on CPU)
+
+The repository runner decodes frames with OpenCV, passes them through
+`UltralyticsYOLODetector` behind the `Detector` interface, converts model
+results to `Detection` objects, and calls `VideoAnalyticsPipeline.process_frame()`.
+The runner draws those detections and writes the annotated video. `NullTracker`
+returns no tracks; tracking and persistent IDs are not enabled yet.
+
+Command used from the repository root (PowerShell):
+
+```powershell
+& 'env/Scripts/python.exe' -m src.run_video --source data/input/test_traffic.mp4 --model models/yolo26n.pt --output outputs/step3_repo_yolo.mp4 --device cpu --conf 0.25 --imgsz 640
+```
+
+The unspecified IoU threshold came from `configs/default.yaml` (0.45).
+The output is `outputs/step3_repo_yolo.mp4` and is excluded from Git.
+
+The source video is 1920 × 1080 at 25.00 FPS. Source video FPS describes
+the media playback rate. Detection throughput divides processed frames by
+time spent in the detection stage. End-to-end processing throughput divides
+processed frames by total wall time, including model load and MP4 finalization.
+
+| Runtime result | Codex validation run | Independent verification (user-reported) |
+|---|---:|---:|
+| Processed frames | 393 | 393 |
+| Total detections | 2,288 | 2,288 |
+| Total wall time | 32.74 s | 38.99 s |
+| Average detection latency | 58.76 ms/frame | 71.31 ms/frame |
+| Detection throughput (inference stage) | 17.02 frames/s | 14.02 frames/s |
+| End-to-end processing throughput | 12.00 frames/s | ≈10.08 frames/s |
+
+The output was reopened with OpenCV and all 393 frames decoded. A sampled
+output frame visibly contains bounding boxes, class names, and confidence
+scores. This confirms the same basic detection operation as the verified raw
+Ultralytics CLI baseline, now routed through the repository's abstractions.
+The user reported that the independent verification also completed the full
+pipeline and passed `python -m compileall src` and `git diff --check`. These
+are separate local runs, not a controlled speed comparison with each other
+or the CLI baseline.
