@@ -4,3 +4,4 @@ PyYAML>=6.0,<7.0
 ultralytics==8.4.171
 lap>=0.5.12
 scipy>=1.13,<2.0
+trackeval @ git+https://github.com/JonathonLuiten/TrackEval.git@12c8791b303e0a0b50f753af204249e622d0281a
