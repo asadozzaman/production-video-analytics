@@ -230,3 +230,89 @@ fragmentation.
 The focused adapter tests, syntax/import checks, and `git diff --check`
 passed. The full detection-only Step 3 command also completed all 393 frames
 with 2,288 detections after the tracking addition.
+
+## Step 5 — Machine-readable run results
+
+Status: **PASS** (functional artifact and consistency validation on CPU)
+
+The repository runner now writes one frame entry and zero or more track CSV
+rows from each `FrameResult` while keeping the annotated video workflow from
+Step 4. Serialization lives in `src/results.py`; the detector and tracker do
+not write output files.
+
+Command used from the repository root (PowerShell):
+
+```powershell
+& 'env/Scripts/python.exe' -m src.run_video --source data/input/test_traffic.mp4 --model models/yolo26n.pt --output-dir outputs/step5_machine_results --device cpu --conf 0.25 --imgsz 640 --tracker bytetrack
+```
+
+The completed directory contains:
+
+```text
+outputs/step5_machine_results/
+├── annotated.mp4
+├── tracks.csv
+├── frames.json
+└── summary.json
+```
+
+`tracks.csv` is UTF-8 with one row per active track observation. Its columns,
+in order, are `frame_index`, `timestamp_seconds`, `track_id`, `class_id`,
+`class_name`, `confidence`, `x1`, `y1`, `x2`, and `y2`. Detection-only runs
+write the header with no fabricated track rows.
+
+`frames.json` has top-level `schema_version: 1` and a `frames` array. Each
+entry has `frame_index`, `timestamp_seconds`, `detections`, and `tracks`.
+Detections contain `xyxy`, `confidence`, `class_id`, and `class_name`. Tracks
+contain `track_id`, `xyxy`, `confidence`, `class_id`, `class_name`, `age`, and
+`missed_frames`. Coordinates and timestamps are JSON numbers; missing class
+names are `null`. Empty detection or track lists are `[]`.
+
+`summary.json` has top-level `schema_version: 1` and the groups `run`,
+`input`, `model`, `tracker`, `results`, `performance`, and `environment`. It
+records the effective CLI/YAML settings used to construct the detector and
+tracker. For this run it records model `models/yolo26n.pt`, confidence 0.25,
+IoU 0.45, image size 640, device `cpu`, and the ByteTrack settings from
+`configs/default.yaml`. It also records Python 3.10.10, Ultralytics 8.4.171,
+PyTorch 2.14.1+cpu, and CUDA unavailable. No unmeasured resource or accuracy
+claims are included.
+
+Frame and CSV records stream to a temporary directory, so decoded image
+arrays are not accumulated for output. Once the video writer closes, the
+runner writes a completed `summary.json` and renames the temporary directory
+to the requested output directory. An existing `--output-dir` is rejected to
+avoid replacing a completed run. The legacy `--output path.mp4` still writes
+the MP4 at that path and places the three structured files in a sibling
+`path/` directory; its summary is promoted last as the completion marker.
+Total wall time covers model loading through video and frame-result writing,
+before summary creation and publication.
+
+| Observed repository result | Value |
+|---|---:|
+| Processed frames | 393 |
+| Total detections | 2,288 |
+| Total track observations | 1,761 |
+| Unique track IDs observed | 42 |
+| Source video FPS | 25.00 |
+| Output resolution | 1920 × 1080 |
+| Total wall time | 26.39 s |
+| Average detection latency | 44.28 ms/frame |
+| Detection throughput (inference stage) | 22.58 frames/s |
+| Average tracking latency | 1.24 ms/frame |
+| Tracking throughput (association stage) | 806.88 frames/s |
+| End-to-end processing throughput | 14.89 frames/s |
+
+The MP4 reopened and decoded all 393 frames at 1920 × 1080 and 25 FPS; a
+sampled frame visibly retained boxes, IDs, class names, and confidence scores.
+The JSON reopened and parsed with 393 sequential frame indices (0–392) and
+monotonic timestamps. Its detections summed to 2,288; its tracks and CSV rows
+both summed to 1,761. The CSV contained 42 distinct track IDs, matching the
+summary. Every CSV frame index and timestamp matched its frame entry.
+
+Five focused unit tests passed, including the existing ByteTrack tests.
+`python -m compileall src` and `git diff --check` passed. A separate full
+detection-only run also processed 393 frames and 2,288 detections, produced
+parseable JSON and a header-only CSV, and decoded a complete MP4.
+
+These artifacts demonstrate pipeline and schema integration. They do not
+measure detection or tracking accuracy, ID switches, memory use, or cost.

@@ -2,7 +2,7 @@
 
 A production-oriented computer vision portfolio project for turning raw video into reliable detections, tracks, counts, operational metrics, and machine-readable results.
 
-> **Status:** The repository runs pretrained YOLO detection and ByteTrack tracking on video. Formal tracking evaluation and reproducible benchmarks are later milestones.
+> **Status:** The repository runs pretrained YOLO detection and ByteTrack tracking on video and writes annotated MP4, CSV, and JSON run results. Formal tracking evaluation and broader benchmarks are later milestones.
 
 ## Why this project exists
 
@@ -42,15 +42,25 @@ production-video-analytics/
 ├── configs/
 │   └── default.yaml
 ├── docs/
-│   └── architecture.md
+│   ├── architecture.md
+│   └── phase1_baseline.md
 ├── examples/
 │   └── README.md
-└── src/
-    ├── __init__.py
-    ├── detection.py
-    ├── tracking.py
-    ├── video_pipeline.py
-    └── metrics.py
+├── src/
+│   ├── __init__.py
+│   ├── detection.py
+│   ├── detectors/
+│   │   └── ultralytics_yolo.py
+│   ├── tracking.py
+│   ├── trackers/
+│   │   └── bytetrack.py
+│   ├── video_pipeline.py
+│   ├── metrics.py
+│   ├── results.py
+│   └── run_video.py
+└── tests/
+    ├── test_bytetrack.py
+    └── test_results.py
 ```
 
 ## Benchmark plan
@@ -85,7 +95,7 @@ No benchmark numbers will be published without a reproducible experiment.
 - [x] Integrate a public pretrained YOLO model
 - [x] Add ByteTrack adapter
 - [ ] Add temporal filtering and line/zone counting
-- [ ] Produce JSON/CSV results and annotated video
+- [x] Produce JSON/CSV results and annotated video
 - [ ] Add tests and a reproducible public example
 - [ ] Benchmark CPU/GPU throughput and cost per video hour
 - [ ] Add FastAPI, Docker, monitoring, and deployment guidance
