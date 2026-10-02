@@ -64,3 +64,52 @@ produce:
 - track-level CSV
 - run summary
 - detection/tracking timing metrics
+
+## Verified YOLO Detection Baseline
+
+Status: **PASS**
+
+The baseline was executed locally on CPU and the complete test video was
+processed successfully.
+
+### Runtime environment
+
+| Component | Version / Value |
+|---|---|
+| Python | 3.10.10 |
+| Ultralytics | 8.4.171 |
+| PyTorch | 2.14.1+cpu |
+| CUDA available | False |
+| Execution device | CPU |
+
+### Input video
+
+| Property | Value |
+|---|---|
+| File | `data/input/test_traffic.mp4` |
+| Codec | H.264 |
+| Resolution | 1920 × 1080 |
+| Frame rate | 25 FPS |
+| Frame count | 393 |
+| Duration | 15.72 seconds |
+
+### Detection configuration
+
+- Model: YOLO26n
+- Weights: `models/yolo26n.pt`
+- Confidence threshold: 0.25
+- Inference image size: 640
+- Device: CPU
+
+### Baseline command
+
+```bash
+yolo predict \
+  model=models/yolo26n.pt \
+  source=data/input/test_traffic.mp4 \
+  conf=0.25 \
+  imgsz=640 \
+  device=cpu \
+  save=True \
+  project=outputs \
+  name=step2_yolo_baseline
