@@ -4,6 +4,8 @@
 
 Convert video into reliable, auditable analytics while keeping model inference, tracking, business logic, and infrastructure independently replaceable.
 
+> **Scope:** the component table and data-flow diagram below describe the target architecture. The current implementation includes decoding, detection, ByteTrack association, stage timing, and MP4/JSON/CSV outputs. Temporal filtering, counting, resource/cost measurement, and deployment remain planned. See the [implemented pipeline](../README.md#implemented-architecture).
+
 ## Component responsibilities
 
 | Component | Responsibility | Primary failure signals |

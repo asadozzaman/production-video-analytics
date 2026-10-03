@@ -1,113 +1,110 @@
 # Production Video Analytics
 
-A production-oriented computer vision portfolio project for turning raw video into reliable detections, tracks, counts, operational metrics, and machine-readable results.
+**YOLO detection · ByteTrack tracking · Inspectable run artifacts**
 
-> **Status:** The repository runs pretrained YOLO detection and ByteTrack tracking on video and writes annotated MP4, CSV, and JSON run results. Formal tracking evaluation and broader benchmarks are later milestones.
+[![CPU tests](https://github.com/asadozzaman/production-video-analytics/actions/workflows/ci.yml/badge.svg)](https://github.com/asadozzaman/production-video-analytics/actions/workflows/ci.yml)
 
-## Why this project exists
+A Python video pipeline that keeps detection, tracking, timing, and result serialization behind clear interfaces. Process a video into an annotated MP4, per-frame JSON, track-observation CSV, and an effective-configuration summary.
 
-A model demo is not the same as a dependable video analytics system. Real deployments must handle difficult lighting, small objects, occlusion, motion blur, identity switches, long videos, GPU limits, failure recovery, and measurable processing cost.
+**Current status:** working detection/tracking baseline with recorded CPU runs. Counting, formal accuracy evaluation, API deployment, and GPU comparisons are upcoming milestones.
 
-This project is being built to demonstrate the full path from computer vision inference to an observable production pipeline.
+[Recorded experiment](docs/phase1_baseline.md) · [Architecture decisions](docs/architecture.md) · [Tests](tests)
 
-## Target use cases
+## Recorded result
 
-- Object detection, segmentation, tracking, and counting
-- High-resolution and long-form video processing
-- Safety, retail, traffic, agriculture, and industrial analytics
-- Offline batch inference with future API and cloud deployment support
-- Evidence-based evaluation of accuracy, speed, stability, and cost
+The [Step 5 functional run](docs/phase1_baseline.md#step-5--machine-readable-run-results) processed all **393 frames** of a 1920 × 1080, 25 FPS video using YOLO26n at inference size 640 on CPU.
 
-## Architecture
+| Measurement | Recorded value |
+| --- | ---: |
+| End-to-end processing throughput | 14.89 frames/s |
+| Detection-stage throughput | 22.58 frames/s |
+| Mean detection latency | 44.28 ms/frame |
+| Mean tracking latency | 1.24 ms/frame |
+| Wall time | 26.39 s |
+| Track observations / distinct track IDs | 1,761 / 42 |
+
+Settings: confidence **0.25**, NMS IoU **0.45**, ByteTrack settings in [`configs/default.yaml`](configs/default.yaml). The recorded environment was Python 3.10.10, Ultralytics 8.4.171, and PyTorch 2.14.1+cpu.
+
+These are recorded functional results, not a controlled hardware benchmark. The CPU model and redistributable source-video reference are not recorded, so exact performance reproduction is incomplete. The 42 IDs are **not a ground-truth object count**. Detection accuracy, tracking accuracy, ID switches, memory use, and cost have not been measured. The source video's 25 FPS is its playback rate, not processing speed.
+
+## Run on your video
+
+Use Python 3.10+ in a virtual environment:
+
+```bash
+git clone https://github.com/asadozzaman/production-video-analytics.git
+cd production-video-analytics
+python -m venv .venv
+# Linux/macOS: source .venv/bin/activate
+# Windows PowerShell: .venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+```
+
+Provide a local video and compatible YOLO weights that you are entitled to use. Both must already exist; the runner does not download them.
+
+```bash
+python -m src.run_video --source path/to/video.mp4 --model path/to/model.pt --output-dir outputs/demo --device cpu --conf 0.25 --iou 0.45 --imgsz 640 --tracker bytetrack
+```
+
+Use `--device auto` for Ultralytics device selection, `--device 0` for a CUDA device, or `--tracker none` for detection only. The **CLI tracker default is `none`**. Choose a new output directory for each run; existing directories are rejected.
+
+| Output | Contents |
+| --- | --- |
+| `annotated.mp4` | Boxes, class labels, confidence, and active track IDs |
+| `frames.json` | Sequential frame indices, timestamps, detections, and tracks |
+| `tracks.csv` | One row per active track observation |
+| `summary.json` | Effective configuration, environment, counts, and stage timings |
+
+## Implemented architecture
 
 ```mermaid
 flowchart TD
-    A["Video input"] --> B["Frame decoding"]
-    B --> C["Object detection"]
-    C --> D["Multi-object tracking"]
-    D --> E["Temporal filtering"]
-    E --> F["Counting and analytics"]
-    F --> G["Metrics and logs"]
-    G --> H["JSON / API results"]
+    V["Video + local weights"] --> R["CLI: decode and configure"]
+    R --> D["YOLO detector adapter"]
+    D --> P["Typed Detection objects"]
+    P --> T["ByteTrack adapter"]
+    T --> O["Typed Track objects"]
+    O --> W["Video + JSON + CSV writer"]
+    D --> M["Stage timings"]
+    T --> M
+    M --> S["Run summary"]
+    W --> S
 ```
 
-See [the architecture document](docs/architecture.md) for component boundaries, reliability principles, and the planned production path.
+The detector calls model inference; the tracker consumes converted detection objects. Serialization lives outside both adapters. For `--output-dir`, results stream into a temporary directory and are published after completion. The legacy `--output` mode uses the summary as its completion marker; see the [artifact contract](docs/phase1_baseline.md#step-5--machine-readable-run-results).
 
-## Repository structure
+## Engineering decisions worth inspecting
 
-```text
-production-video-analytics/
-├── README.md
-├── requirements.txt
-├── configs/
-│   └── default.yaml
-├── docs/
-│   ├── architecture.md
-│   └── phase1_baseline.md
-├── examples/
-│   └── README.md
-├── src/
-│   ├── __init__.py
-│   ├── detection.py
-│   ├── detectors/
-│   │   └── ultralytics_yolo.py
-│   ├── tracking.py
-│   ├── trackers/
-│   │   └── bytetrack.py
-│   ├── video_pipeline.py
-│   ├── metrics.py
-│   ├── results.py
-│   └── run_video.py
-└── tests/
-    ├── test_bytetrack.py
-    └── test_results.py
+- **Stable interfaces:** [`Detection`](src/detection.py) and [`Track`](src/tracking.py) separate the application from model-library outputs.
+- **Transparent association:** [`ByteTrackAdapter`](src/trackers/bytetrack.py) makes threshold mapping explicit. At confidence 0.25, detections below 0.25 cannot reach the tracker's 0.1 low threshold.
+- **Bounded output memory:** [`results.py`](src/results.py) streams frame and CSV records rather than accumulating decoded images.
+- **Traceable runs:** [`run_video.py`](src/run_video.py) records effective CLI/YAML settings and distinguishes stage throughput from wall-time throughput.
+
+Some configuration fields describe planned behavior. Temporal filtering, counting, warmup exclusion, resource measurement, and cost estimation are not implemented merely because related keys appear in the YAML file.
+
+## Automated checks
+
+```bash
+python -m unittest discover -s tests -v
+python -m compileall -q src tests
 ```
 
-## Benchmark plan
+CI runs the existing deterministic adapter and serialization tests on CPU, plus a CLI import/help smoke check. It does not download model weights, run the traffic experiment, or measure detection/tracking accuracy.
 
-Every benchmark will record the exact model, video, hardware, resolution, thresholds, and software version so results can be reproduced.
+## Next milestones
 
-| Area | Metric | Status |
-|---|---|---|
-| Throughput | Frames per second | Planned |
-| Latency | Decode, inference, tracking, end-to-end | Planned |
-| Detection | Precision, recall, false positives, missed detections | Planned |
-| Tracking | ID switches, fragmentation, track continuity | Planned |
-| Resources | GPU memory, CPU memory, utilization | Planned |
-| Cost | Estimated compute cost per video hour | Planned |
+- [x] YOLO adapter and typed detection contract
+- [x] ByteTrack integration and identity/reset tests
+- [x] Annotated video, streaming JSON/CSV, and run summary
+- [x] Recorded CPU functional runs and artifact consistency checks
+- [ ] Redistributable sample video with provenance and input checksum
+- [ ] Human-verified ground truth and tracking/counting evaluation
+- [ ] Temporal filtering and line/zone counting
+- [ ] Controlled CPU/GPU comparisons with full hardware metadata
+- [ ] FastAPI, Docker, durable jobs, monitoring, and deployment
 
-No benchmark numbers will be published without a reproducible experiment.
+## Data and license
 
-## Engineering principles
-
-- **Measure before optimizing:** profile decode, inference, tracking, and serialization separately.
-- **Recall failures must be visible:** save false-negative and low-confidence examples for review.
-- **Temporal evidence matters:** use tracking and neighboring frames rather than isolated detections alone.
-- **Configuration over hard-coding:** keep thresholds and runtime choices in versioned configuration.
-- **Privacy by design:** do not commit customer footage, faces, plates, credentials, or proprietary data.
-- **Honest status:** distinguish working features, experiments, and planned work.
-
-## Roadmap
-
-- [x] Define architecture and repository foundation
-- [x] Add typed detection and tracking contracts
-- [x] Add configuration and metrics foundation
-- [x] Integrate a public pretrained YOLO model
-- [x] Add ByteTrack adapter
-- [ ] Add temporal filtering and line/zone counting
-- [x] Produce JSON/CSV results and annotated video
-- [ ] Add tests and a reproducible public example
-- [ ] Benchmark CPU/GPU throughput and cost per video hour
-- [ ] Add FastAPI, Docker, monitoring, and deployment guidance
-
-## Data and confidentiality
-
-This repository uses only public, licensed, or synthetic examples. It does not contain employer code, private datasets, customer information, credentials, model weights, or internal infrastructure details.
-
-## License
-
-Released under the [MIT License](LICENSE).
-
----
+Do not commit employer code, customer footage, credentials, or proprietary weights. Supply public, licensed, or synthetic inputs for demonstrations. Repository code is under the [MIT License](LICENSE); dependencies, model weights, and input media retain their own terms.
 
 Built by [Md. Asadozzaman](https://github.com/asadozzaman), Senior AI Engineer focused on Computer Vision and production AI systems.
